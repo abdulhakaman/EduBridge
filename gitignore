@@ -1,0 +1,21 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+# Virtual environments
+.venv/
+venv/
+ENV/
+# Local app data and databases
+*.sqlite
+*.sqlite3
+*.db
+# Packaging output
+build/
+dist/
+*.spec
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
