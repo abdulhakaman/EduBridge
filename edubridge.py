@@ -655,6 +655,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bind", default="0.0.0.0", help="Address for the browser interface")
     parser.add_argument("--no-browser", action="store_true", help="Do not open a browser automatically")
     parser.add_argument("--local-only", action="store_true", help="Do not create a public HTTPS address")
+    parser.add_argument("--public-url", default="", help="Fixed https address for a saved Cloudflare tunnel")
+    parser.add_argument("--tunnel-token", default="", help="Cloudflare tunnel token for --public-url")
     return parser.parse_args(argv)
 
 
@@ -682,26 +684,50 @@ def run_web_ui(args: argparse.Namespace) -> None:
 
     def start_tunnel() -> None:
         try:
-            from public_tunnel import start_public_tunnel, wait_for_url
+            from public_tunnel import load_stable_tunnel, start_named_tunnel, start_public_tunnel, wait_for_url
 
             holder: dict[str, str] = {}
+            stable = None
+            try:
+                stable = load_stable_tunnel(core.app_dir, args.public_url, args.tunnel_token)
+            except ValueError as exc:
+                print(f"{exc} Using a temporary address instead.", flush=True)
+
+            if stable is not None:
+                core.public_url = stable.url
+                core.public_stable = True
+
+                def ready() -> None:
+                    holder["url"] = stable.url
+
+                print(f"\nFixed address: {stable.url}\n", flush=True)
+                process = start_named_tunnel(core.app_dir, stable.token, ready)
+                tunnel_box["process"] = process
+                wait_for_url(holder, process)
+                print("Fixed address is connected.", flush=True)
+                return
 
             def remember(url: str) -> None:
                 holder["url"] = url
                 core.public_url = url
+                core.public_stable = False
 
+            print("Creating a temporary public HTTPS address...", flush=True)
             process = start_public_tunnel(args.web_port, core.app_dir, remember)
             tunnel_box["process"] = process
             url = wait_for_url(holder, process)
             core.public_url = url
-            print(f"\nAny network: {url}\n", flush=True)
+            core.public_stable = False
+            print(f"\nTemporary address: {url}", flush=True)
+            print("This address changes every time EduBridge starts.", flush=True)
+            print("For a fixed address, save a Cloudflare tunnel token as tunnel.token", flush=True)
+            print("and the https address as public_url.txt next to run.bat.\n", flush=True)
         except Exception as exc:
             core.public_url_error = str(exc)
             print(f"Public HTTPS address was not created ({exc}).", flush=True)
             print("Accounts still work on this computer. Other networks need that public address.", flush=True)
 
     if core.public_requested:
-        print("Creating a public HTTPS address...", flush=True)
         threading.Thread(target=start_tunnel, name="edubridge-tunnel", daemon=True).start()
 
     try:

@@ -501,8 +501,12 @@ function showError(err) {
 
 function showAccess(info) {
   const url = info.public_url || "";
+  if (url && info.public_error) {
+    $("access-url").textContent = `Fixed address is not connected: ${url}`;
+    return;
+  }
   if (url) {
-    $("access-url").textContent = `Any network: ${url}`;
+    $("access-url").textContent = info.public_stable ? `Fixed address: ${url}` : `Temporary address: ${url}`;
     return;
   }
   if (info.public_error) {

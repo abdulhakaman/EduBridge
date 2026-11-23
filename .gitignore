@@ -20,3 +20,6 @@ dist/
 Thumbs.db
 # Downloaded public-tunnel helper
 bin/
+# Fixed public address. Keep the tunnel token off the repo.
+tunnel.token
+public_url.txt

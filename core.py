@@ -69,6 +69,7 @@ class EduBridgeCore:
         self.public_url = ""
         self.public_url_error = ""
         self.public_requested = False
+        self.public_stable = False
         self.create_tables()
 
     def create_tables(self) -> None:
@@ -474,6 +475,7 @@ class EduBridgeCore:
             "public_url": self.public_url,
             "public_error": self.public_url_error,
             "public_pending": self.public_requested and not self.public_url and not self.public_url_error,
+            "public_stable": self.public_stable,
         }
 
     def send_resource(self, resource_id: int, address: str, user_id: int | None = None) -> None:
