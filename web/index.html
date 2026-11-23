@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#145c50">
+  <title>EduBridge</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>EduBridge</h1>
+      <p class="sub">Course library you can open from any phone, tablet, or computer</p>
+    </div>
+    <div>
+      <p id="access-url" class="access"></p>
+      <p id="whoami" class="muted"></p>
+      <button id="logout" class="ghost hidden">Sign out</button>
+    </div>
+  </header>
+
+  <section id="auth" class="auth">
+    <div class="dialog">
+      <h2>Sign in from any network</h2>
+      <p class="muted">Teacher and student each create an account. Then send files by username — no shared Wi-Fi required.</p>
+      <div class="row wrap">
+        <button id="show-login" class="primary">Sign in</button>
+        <button id="show-register" class="ghost">Create account</button>
+      </div>
+      <form id="login-form">
+        <label>Username <input id="login-username" autocomplete="username" required></label>
+        <label>Password <input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="primary">Sign in</button>
+      </form>
+      <form id="register-form" class="hidden">
+        <label>Username <input id="reg-username" autocomplete="username" required></label>
+        <label>Password <input id="reg-password" type="password" autocomplete="new-password" required></label>
+        <label>Full name <input id="reg-name" autocomplete="name" required></label>
+        <label>Academic ID <input id="reg-id" required></label>
+        <label>Department <input id="reg-dept" required></label>
+        <label>Role
+          <select id="reg-role">
+            <option>Student</option>
+            <option>Teacher</option>
+          </select>
+        </label>
+        <button type="submit" class="primary">Create account</button>
+      </form>
+    </div>
+  </section>
+
+  <nav class="tabs hidden" id="app-tabs" role="tablist">
+    <button class="tab active" data-tab="library">Library</button>
+    <button class="tab" data-tab="profile">Profile</button>
+    <button class="tab" data-tab="share">Share</button>
+    <button class="tab" data-tab="sign">Signatures</button>
+  </nav>
+
+  <main id="app-main" class="hidden">
+    <section id="library" class="panel active">
+      <div class="row">
+        <h2>Course materials</h2>
+        <button id="add-open" class="primary">Add a file</button>
+      </div>
+      <div class="search-row">
+        <input id="search" type="search" placeholder="Search title, course, or year" enterkeyhint="search">
+        <button id="search-clear" class="ghost">Clear</button>
+      </div>
+      <p id="resource-count" class="muted"></p>
+      <div id="resource-list" class="cards"></div>
+      <p class="hint">Files marked Signed have an instructor signature. Only trusted signed files can be shared as official material.</p>
+    </section>
+
+    <section id="profile" class="panel">
+      <h2>Your profile</h2>
+      <p class="muted">Saved on the EduBridge server. Sign in from any device to keep using this account.</p>
+      <label>Full name <input id="full-name" autocomplete="name"></label>
+      <label>Academic ID <input id="academic-id"></label>
+      <label>Department <input id="department"></label>
+      <label>Role
+        <select id="role">
+          <option>Student</option>
+          <option>Teacher</option>
+        </select>
+      </label>
+      <button id="save-profile" class="primary">Save profile</button>
+    </section>
+
+    <section id="share" class="panel">
+      <h2>Share with an account</h2>
+      <p class="muted">Send a signed file to another EduBridge username. They can be on mobile data, home Wi-Fi, or campus.</p>
+      <div id="inbox-list" class="cards"></div>
+      <label>Recipient username <input id="share-username" placeholder="student01" autocomplete="off"></label>
+      <button id="send-file" class="primary">Send selected file to username</button>
+      <p class="hint warn">Official transfers require a trusted instructor signature. Compare the teacher fingerprint before importing their public key.</p>
+      <details>
+        <summary>Optional: same Wi-Fi device transfer</summary>
+        <p id="share-status" class="status-line"></p>
+        <p id="share-address" class="muted"></p>
+        <button id="toggle-share">Start LAN sharing</button>
+        <div id="peer-list" class="cards"></div>
+        <label>Receiver address <input id="peer-address" placeholder="192.168.1.20"></label>
+        <button id="send-lan">Send selected file to that address</button>
+        <button id="cancel-send" class="ghost" disabled>Cancel LAN transfer</button>
+      </details>
+    </section>
+
+    <section id="sign" class="panel">
+      <h2>Official instructor materials</h2>
+      <p class="muted">Teachers sign files with a private key. Students import the public key and compare its fingerprint with the teacher.</p>
+      <h3>Teacher actions</h3>
+      <label>Key passphrase <input id="key-pass" type="password"></label>
+      <label>Confirm passphrase <input id="key-pass2" type="password"></label>
+      <div class="row wrap">
+        <button id="create-key" class="primary">Create signing key</button>
+        <button id="sign-file">Sign selected library file</button>
+      </div>
+      <p class="hint">The private key stays on the EduBridge device. Never share it.</p>
+      <h3>Trusted instructors</h3>
+      <label>Instructor public key <input id="trust-file" type="file" accept=".pem,.txt,*/*"></label>
+      <p id="trust-fingerprint" class="fingerprint"></p>
+      <label>Instructor name <input id="trust-name"></label>
+      <label class="check"><input id="trust-confirm" type="checkbox"> I compared this fingerprint with the instructor on a separate channel</label>
+      <button id="import-key" class="primary">Import instructor public key</button>
+      <div id="trust-list" class="cards"></div>
+    </section>
+  </main>
+
+  <div id="add-modal" class="modal hidden">
+    <form id="add-form" class="dialog">
+      <h3>Add course material</h3>
+      <label>File <input id="add-file" type="file" required></label>
+      <label>Title <input id="add-title" required></label>
+      <label>Course code <input id="add-course" required></label>
+      <label>Academic year <input id="add-year" required></label>
+      <div class="row wrap">
+        <button type="button" id="add-cancel" class="ghost">Cancel</button>
+        <button type="submit" class="primary">Add resource</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="incoming-modal" class="modal hidden">
+    <div class="dialog">
+      <h3>Verified course file</h3>
+      <p id="incoming-text"></p>
+      <input type="hidden" id="incoming-share-id">
+      <div class="row wrap">
+        <button id="incoming-no" class="ghost">Decline</button>
+        <button id="incoming-yes" class="primary">Accept</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div id="progress-wrap"><div id="progress"></div></div>
+    <p id="status">Ready</p>
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

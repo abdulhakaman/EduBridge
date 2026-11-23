@@ -1,0 +1,65 @@
+"""Core library checks that do not need a window or browser."""
+from __future__ import annotations
+
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from core import EduBridgeCore, default_app_dir
+
+
+class PathTests(unittest.TestCase):
+    def test_env_override(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch.dict(os.environ, {"EDUBRIDGE_HOME": folder}):
+                self.assertEqual(default_app_dir(), Path(folder))
+
+
+class CoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.core = EduBridgeCore(app_dir=Path(self.temp.name), port=45991, discovery_port=45992)
+
+    def tearDown(self) -> None:
+        self.core.close()
+        self.temp.cleanup()
+
+    def test_save_profile_and_add_file(self) -> None:
+        teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
+        self.core.save_profile("Ada Teacher", "T1", "CS", "Teacher", teacher)
+        result = self.core.add_uploaded_file("notes.txt", b"hello", "Lecture 1", "CS101", "2026", teacher)
+        self.assertEqual(result["file_name"], "notes.txt")
+        rows = self.core.list_resources()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["title"], "Lecture 1")
+        self.assertEqual(rows[0]["signature"], "Unsigned")
+
+    def test_edit_clears_signature_json_when_unsigned_stays(self) -> None:
+        teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
+        self.core.add_uploaded_file("notes.txt", b"hello", "Lecture 1", "CS101", "2026", teacher)
+        resource_id = self.core.list_resources(user_id=teacher)[0]["id"]
+        changed = self.core.update_resource(resource_id, "Lecture 1b", "CS101", "2026", teacher)
+        self.assertFalse(changed["cleared_signature"])
+        self.assertEqual(self.core.list_resources(user_id=teacher)[0]["title"], "Lecture 1b")
+
+    def test_send_to_another_account(self) -> None:
+        teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
+        student = self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")
+        self.core.add_uploaded_file("notes.txt", b"official notes", "Lecture 1", "CS101", "2026", teacher)
+        resource_id = self.core.list_resources(user_id=teacher)[0]["id"]
+        key = self.core.create_signing_key("passphrase-1", "passphrase-1", user_id=teacher)
+        self.core.sign_resource(resource_id, "passphrase-1", teacher)
+        self.core.import_trusted_key(key["public_key_pem"].encode(), "Ada Teacher", True, student)
+        self.core.send_to_username(resource_id, "sam", teacher)
+        waiting = self.core.inbox(student)
+        self.assertEqual(len(waiting), 1)
+        self.core.decide_share(waiting[0]["id"], True, student)
+        rows = self.core.list_resources(user_id=student)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["signature"], "Signed")
+
+
+if __name__ == "__main__":
+    unittest.main()

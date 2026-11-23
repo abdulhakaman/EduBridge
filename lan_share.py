@@ -15,6 +15,20 @@ MAX_BYTES = 1024 * 1024 * 1024
 CHUNK = 64 * 1024
 
 
+def parse_peer_address(value: str, default_port: int) -> tuple[str, int]:
+    text = value.strip()
+    if not text:
+        raise ValueError("Enter a receiver address.")
+    if ":" in text:
+        host, port_text = text.rsplit(":", 1)
+        if host and port_text.isdigit():
+            port = int(port_text)
+            if 1 <= port <= 65535:
+                return host, port
+        raise ValueError("Use an address such as 127.0.0.1:45882.")
+    return text, default_port
+
+
 def _read_line(sock: socket.socket, limit: int = 8192) -> bytes:
     data = bytearray()
     while len(data) <= limit:
@@ -97,7 +111,7 @@ class LanShare:
                 setattr(self, name, None)
 
     def _beacon_loop(self) -> None:
-        payload = json.dumps({"type": "edubridge_peer", "name": socket.gethostname()}).encode("utf-8")
+        payload = json.dumps({"type": "edubridge_peer", "name": socket.gethostname(), "port": self.port}).encode("utf-8")
         while self.running and self.beacon_socket:
             try:
                 self.beacon_socket.sendto(payload, ("255.255.255.255", self.discovery_port))
@@ -118,7 +132,7 @@ class LanShare:
             try:
                 message = json.loads(packet.decode("utf-8"))
                 if message.get("type") == "edubridge_peer" and address[0] != self.local_ip():
-                    self.events.put(("peer", {"ip": address[0], "name": str(message.get("name", "EduBridge computer"))}))
+                    self.events.put(("peer", {"ip": address[0], "name": str(message.get("name", "EduBridge computer")), "port": int(message.get("port", self.port))}))
             except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
                 continue
 
@@ -221,7 +235,8 @@ class LanShare:
             except OSError:
                 pass
 
-    def send_file(self, host: str, path: Path, title: str, course: str, year: str, signature: dict) -> None:
+    def send_file(self, host: str, path: Path, title: str, course: str, year: str, signature: dict, dest_port: int | None = None) -> None:
+        port = self.port if dest_port is None else dest_port
         with self._send_lock:
             if self._send_running:
                 self.events.put(("error", "A transfer is already in progress."))
@@ -229,9 +244,9 @@ class LanShare:
             self._send_running = True
             self._active_cancel = threading.Event()
             cancel = self._active_cancel
-        threading.Thread(target=self._send, args=(host, path, title, course, year, signature, cancel), daemon=True).start()
+        threading.Thread(target=self._send, args=(host, path, title, course, year, signature, cancel, port), daemon=True).start()
 
-    def _send(self, host: str, path: Path, title: str, course: str, year: str, signature: dict, cancel: threading.Event) -> None:
+    def _send(self, host: str, path: Path, title: str, course: str, year: str, signature: dict, cancel: threading.Event, dest_port: int) -> None:
         try:
             try:
                 size = path.stat().st_size
@@ -242,7 +257,7 @@ class LanShare:
                     for block in iter(lambda: source.read(CHUNK), b""):
                         digest.update(block)
                 request = {"type": "file", "name": path.name, "title": title, "course": course, "year": year, "size": size, "sha256": digest.hexdigest(), "signature": signature}
-                with socket.create_connection((host, self.port), timeout=15) as connection:
+                with socket.create_connection((host, dest_port), timeout=15) as connection:
                     with self._send_lock:
                         self._active_send = connection
                     try:
@@ -275,7 +290,7 @@ class LanShare:
                         with self._send_lock:
                             if self._active_send is connection:
                                 self._active_send = None
-                self.events.put(("sent", f"Sent {path.name} to {host}."))
+                self.events.put(("sent", f"Sent {path.name} to {host}:{dest_port}."))
             except Exception as exc:
                 if cancel.is_set():
                     self.events.put(("error", f"Cancelled sending {path.name}."))

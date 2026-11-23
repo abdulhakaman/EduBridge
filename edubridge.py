@@ -1,6 +1,7 @@
 """Windows desktop EduBridge app with local storage and signed LAN transfers."""
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import queue
@@ -14,23 +15,22 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from signing import create_teacher_key, fingerprint, load_ed25519_public_key, load_teacher_key, sign_file, verify_file, verify_signature_claim
 
-from lan_share import LanShare
-
-APP_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "EduBridge"
-DB_PATH = APP_DIR / "edubridge.sqlite3"
+from core import EduBridgeCore, default_app_dir
+from lan_share import DISCOVERY_PORT, PORT, LanShare, parse_peer_address
 
 
 class EduBridge:
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, app_dir: Path | None = None, port: int = PORT, discovery_port: int = DISCOVERY_PORT, window_title: str = "EduBridge - Offline Course Library") -> None:
         self.root = root
-        self.root.title("EduBridge - Offline Course Library")
+        self.app_dir = app_dir or default_app_dir()
+        self.root.title(window_title)
         self.root.geometry("1020x680")
         self.root.minsize(780, 520)
         self.root.configure(bg="#f4f7f6")
-        APP_DIR.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(DB_PATH)
+        self.app_dir.mkdir(parents=True, exist_ok=True)
+        self.db = sqlite3.connect(self.app_dir / "edubridge.sqlite3")
         self.db.row_factory = sqlite3.Row
-        self.network = LanShare(APP_DIR / 'Received')
+        self.network = LanShare(self.app_dir / "Received", port=port, discovery_port=discovery_port)
         self.discovered_peers = {}
         self.create_tables()
         self.configure_style()
@@ -158,7 +158,7 @@ class EduBridge:
 
     def build_sharing(self) -> None:
         ttk.Label(self.sharing_tab, text="Nearby EduBridge computers", font=("Segoe UI", 17, "bold")).pack(anchor="w", pady=(0, 6))
-        ttk.Label(self.sharing_tab, text="Start sharing on both computers. They should appear here when connected to the same Wi-Fi.", style="Sub.TLabel", wraplength=850).pack(anchor="w", pady=(0, 16))
+        ttk.Label(self.sharing_tab, text="Start sharing on both computers. They should appear here when connected to the same Wi-Fi. On one computer, open run-teacher.bat and run-student.bat, then send to 127.0.0.1:45882.", style="Sub.TLabel", wraplength=850).pack(anchor="w", pady=(0, 16))
         self.network_status = tk.StringVar(value="Sharing and discovery are stopped.")
         ttk.Label(self.sharing_tab, textvariable=self.network_status, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
         self.ip_label = ttk.Label(self.sharing_tab, text=f"This computer's Wi-Fi address: {self.network.local_ip()}   |   Port: {self.network.port}", style="Sub.TLabel")
@@ -172,12 +172,12 @@ class EduBridge:
         self.peer_table.column("ip", width=250)
         self.peer_table.pack(fill="x", pady=(16, 4))
         self.peer_table.bind("<Double-1>", self.choose_peer)
-        ttk.Label(self.sharing_tab, text="Double-click a computer to select it. You can also enter an address manually.", style="Sub.TLabel").pack(anchor="w", pady=(0, 16))
+        ttk.Label(self.sharing_tab, text="Double-click a computer to select it. You can also enter an address such as 192.168.1.20 or 127.0.0.1:45882.", style="Sub.TLabel").pack(anchor="w", pady=(0, 16))
         ttk.Separator(self.sharing_tab).pack(fill="x", pady=(0, 16))
         ttk.Label(self.sharing_tab, text="Send a library file", font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(0, 10))
         send_row = ttk.Frame(self.sharing_tab)
         send_row.pack(fill="x")
-        ttk.Label(send_row, text="Receiver IP address").pack(side="left", padx=(0, 8))
+        ttk.Label(send_row, text="Receiver address").pack(side="left", padx=(0, 8))
         self.peer_ip_var = tk.StringVar()
         ttk.Entry(send_row, textvariable=self.peer_ip_var, width=25).pack(side="left")
         ttk.Button(send_row, text="Send selected library file", command=self.send_selected).pack(side="left", padx=10)
@@ -229,7 +229,7 @@ class EduBridge:
         public_path = filedialog.asksaveasfilename(title="Save instructor public key", defaultextension=".pem", initialfile="edubridge_instructor_public.pem", filetypes=[("PEM public key", "*.pem")])
         if not public_path:
             return
-        private_path = APP_DIR / "teacher_signing_key.pem"
+        private_path = self.app_dir / "teacher_signing_key.pem"
         if private_path.exists() and not messagebox.askyesno("Replace signing key?", "Replacing this key means students will need to trust the new public key. Continue?"):
             return
         password = simpledialog.askstring("Protect private key", "Choose a passphrase for your encrypted private signing key:", show="*")
@@ -265,7 +265,7 @@ class EduBridge:
         if not password:
             return
         try:
-            private_key = load_teacher_key(APP_DIR / "teacher_signing_key.pem", password)
+            private_key = load_teacher_key(self.app_dir / "teacher_signing_key.pem", password)
             package = sign_file(path, row["title"], row["course_code"], row["academic_year"], self.name_var.get().strip(), private_key)
             with self.db:
                 self.db.execute("UPDATE resources SET signature_json = ? WHERE id = ?", (json.dumps(package), row["id"]))
@@ -327,11 +327,12 @@ class EduBridge:
 
     def refresh_peer_rows(self) -> None:
         now = time.time()
-        self.discovered_peers = {ip: entry for ip, entry in self.discovered_peers.items() if now - entry[1] < 7}
+        self.discovered_peers = {key: entry for key, entry in self.discovered_peers.items() if now - entry[1] < 7}
         for item in self.peer_table.get_children():
             self.peer_table.delete(item)
-        for ip, (name, _seen) in sorted(self.discovered_peers.items()):
-            self.peer_table.insert("", "end", iid=ip, values=(name, ip))
+        for key, (name, _seen, ip, port) in sorted(self.discovered_peers.items()):
+            address = ip if port == self.network.port else f"{ip}:{port}"
+            self.peer_table.insert("", "end", iid=key, values=(name, address))
     def toggle_sharing(self) -> None:
         if self.network.running:
             self.network.stop()
@@ -356,9 +357,14 @@ class EduBridge:
         if not row["signature_json"]:
             messagebox.showwarning("Unsigned resource", "Only resources signed by an instructor can be shared as official course materials.")
             return
-        host = self.peer_ip_var.get().strip()
-        if not host:
-            messagebox.showwarning("Enter receiver address", "Choose a discovered computer or enter its Wi-Fi address.")
+        host_text = self.peer_ip_var.get().strip()
+        if not host_text:
+            messagebox.showwarning("Enter receiver address", "Choose a discovered computer or enter its Wi-Fi address, for example 127.0.0.1:45882.")
+            return
+        try:
+            host, dest_port = parse_peer_address(host_text, self.network.port)
+        except ValueError as exc:
+            messagebox.showwarning("Invalid address", str(exc))
             return
         path = Path(row["file_path"])
         if not path.is_file():
@@ -372,8 +378,8 @@ class EduBridge:
             return
         self.progress_value.set(0)
         self.cancel_button.state(["!disabled"])
-        self.network.send_file(host, path, row["title"], row["course_code"], row["academic_year"], package)
-        self.status.set(f"Connecting to {host}...")
+        self.network.send_file(host, path, row["title"], row["course_code"], row["academic_year"], package, dest_port=dest_port)
+        self.status.set(f"Connecting to {host}:{dest_port}...")
 
     def cancel_transfer(self) -> None:
         self.network.cancel_send()
@@ -420,7 +426,8 @@ class EduBridge:
                     self.progress_value.set(data["percent"])
                     self.status.set("{} {}: {}%".format(data["direction"], data["name"], data["percent"]))
                 elif kind == "peer":
-                    self.discovered_peers[data["ip"]] = (data["name"], time.time())
+                    port = int(data.get("port") or self.network.port)
+                    self.discovered_peers[f"{data['ip']}:{port}"] = (data["name"], time.time(), data["ip"], port)
                     self.refresh_peer_rows()
                 elif kind == "received":
                     request = data["request"]
@@ -637,11 +644,93 @@ class ResourceDialog:
         self.window.destroy()
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="EduBridge offline course library")
+    parser.add_argument("--data-dir", type=Path, help="Folder for the local library, profile, and signing key")
+    parser.add_argument("--port", type=int, default=PORT, help="TCP port used to receive files")
+    parser.add_argument("--discovery-port", type=int, default=DISCOVERY_PORT, help="UDP port used to find nearby computers")
+    parser.add_argument("--title", default="EduBridge - Offline Course Library", help="Window title")
+    parser.add_argument("--ui", choices=("web", "tk"), default="web", help="web works in any browser; tk is the desktop window")
+    parser.add_argument("--web-port", type=int, default=8080, help="Port for the browser interface")
+    parser.add_argument("--bind", default="0.0.0.0", help="Address for the browser interface")
+    parser.add_argument("--no-browser", action="store_true", help="Do not open a browser automatically")
+    parser.add_argument("--local-only", action="store_true", help="Do not create a public HTTPS address")
+    return parser.parse_args(argv)
+
+
+def run_web_ui(args: argparse.Namespace) -> None:
+    import threading
+    import webbrowser
+
+    from werkzeug.serving import make_server
+
+    from web_server import create_app
+
+    core = EduBridgeCore(app_dir=args.data_dir, port=args.port, discovery_port=args.discovery_port)
+    core.public_requested = not args.local_only
+    app = create_app(core)
+    app.config["WEB_PORT"] = args.web_port
+    server = make_server(args.bind, args.web_port, app, threaded=True)
+    server_thread = threading.Thread(target=server.serve_forever, name="edubridge-http", daemon=True)
+    server_thread.start()
+    local_url = f"http://127.0.0.1:{args.web_port}"
+    print(f"EduBridge on this computer: {local_url}", flush=True)
+    if not args.no_browser:
+        threading.Timer(0.4, lambda: webbrowser.open(local_url)).start()
+
+    tunnel_box: dict[str, subprocess.Popen | None] = {"process": None}
+
+    def start_tunnel() -> None:
+        try:
+            from public_tunnel import start_public_tunnel, wait_for_url
+
+            holder: dict[str, str] = {}
+
+            def remember(url: str) -> None:
+                holder["url"] = url
+                core.public_url = url
+
+            process = start_public_tunnel(args.web_port, core.app_dir, remember)
+            tunnel_box["process"] = process
+            url = wait_for_url(holder, process)
+            core.public_url = url
+            print(f"\nAny network: {url}\n", flush=True)
+        except Exception as exc:
+            core.public_url_error = str(exc)
+            print(f"Public HTTPS address was not created ({exc}).", flush=True)
+            print("Accounts still work on this computer. Other networks need that public address.", flush=True)
+
+    if core.public_requested:
+        print("Creating a public HTTPS address...", flush=True)
+        threading.Thread(target=start_tunnel, name="edubridge-tunnel", daemon=True).start()
+
+    try:
+        while server_thread.is_alive():
+            server_thread.join(0.5)
+    except KeyboardInterrupt:
+        print("\nStopping EduBridge.")
+    finally:
+        if server_thread.is_alive():
+            server.shutdown()
+        process = tunnel_box["process"]
+        if process is not None and process.poll() is None:
+            process.terminate()
+        core.close()
+
+
+def run_tk_ui(args: argparse.Namespace) -> None:
     root = tk.Tk()
-    app = EduBridge(root)
+    app = EduBridge(root, app_dir=args.data_dir, port=args.port, discovery_port=args.discovery_port, window_title=args.title)
     root.protocol("WM_DELETE_WINDOW", app.close_app)
     root.mainloop()
+
+
+def main() -> None:
+    args = parse_args()
+    if args.ui == "tk":
+        run_tk_ui(args)
+        return
+    run_web_ui(args)
 
 
 if __name__ == "__main__":

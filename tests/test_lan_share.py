@@ -7,7 +7,19 @@ import time
 import unittest
 from pathlib import Path
 
-from lan_share import LanShare
+from lan_share import LanShare, parse_peer_address
+
+
+class PeerAddressTests(unittest.TestCase):
+    def test_ip_uses_default_port(self) -> None:
+        self.assertEqual(parse_peer_address("127.0.0.1", 45872), ("127.0.0.1", 45872))
+
+    def test_ip_and_port(self) -> None:
+        self.assertEqual(parse_peer_address("127.0.0.1:45882", 45872), ("127.0.0.1", 45882))
+
+    def test_invalid_port(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_peer_address("127.0.0.1:abc", 45872)
 
 
 def _free_port() -> int:
