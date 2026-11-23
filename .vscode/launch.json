@@ -1,0 +1,73 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "EduBridge",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/edubridge.py",
+            "console": "integratedTerminal",
+            "args": ["--ui", "web", "--web-port", "8080"]
+        },
+        {
+            "name": "EduBridge Desktop",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/edubridge.py",
+            "console": "integratedTerminal",
+            "args": ["--ui", "tk"]
+        },
+        {
+            "name": "EduBridge Teacher",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/edubridge.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--data-dir",
+                "${env:LOCALAPPDATA}/EduBridge-Teacher",
+                "--port",
+                "45872",
+                "--discovery-port",
+                "45873",
+                "--ui",
+                "web",
+                "--web-port",
+                "8080",
+                "--title",
+                "EduBridge - Teacher"
+            ]
+        },
+        {
+            "name": "EduBridge Student",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/edubridge.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--data-dir",
+                "${env:LOCALAPPDATA}/EduBridge-Student",
+                "--port",
+                "45882",
+                "--discovery-port",
+                "45883",
+                "--ui",
+                "web",
+                "--web-port",
+                "8081",
+                "--title",
+                "EduBridge - Student"
+            ]
+        },
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        }
+    ]
+}
