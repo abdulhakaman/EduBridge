@@ -60,6 +60,14 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["signature"], "Signed")
 
+    def test_search_other_accounts(self) -> None:
+        teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
+        self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")
+        matches = self.core.search_users("sam", teacher)
+        self.assertEqual([item["username"] for item in matches], ["sam"])
+        self.assertEqual(self.core.search_users("ada", teacher), [])
+        self.assertEqual(self.core.search_users("s", teacher), [])
+
 
 if __name__ == "__main__":
     unittest.main()

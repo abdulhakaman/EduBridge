@@ -305,6 +305,34 @@ $("toggle-share").onclick = async () => {
   }
 };
 
+let userSearchTimer = 0;
+$("share-username").addEventListener("input", () => {
+  clearTimeout(userSearchTimer);
+  userSearchTimer = setTimeout(() => searchUsers().catch(showError), 200);
+});
+
+async function searchUsers() {
+  const query = $("share-username").value.trim();
+  const box = $("user-matches");
+  box.innerHTML = "";
+  if (query.length < 2) return;
+  const people = await api(`/api/users?q=${encodeURIComponent(query)}`);
+  if (!people.length) {
+    box.innerHTML = `<p class="muted">No account matches that name.</p>`;
+    return;
+  }
+  people.forEach((person) => {
+    const el = card(
+      `<h4>@${escapeHtml(person.username)}</h4><p class="muted">${escapeHtml(person.full_name)} · ${escapeHtml(person.role)}</p>`,
+    );
+    el.addEventListener("click", () => {
+      $("share-username").value = person.username;
+      box.innerHTML = "";
+    });
+    box.appendChild(el);
+  });
+}
+
 $("send-file").onclick = async () => {
   if (!state.selectedId) {
     window.alert("Choose a resource from the list first.");
@@ -316,11 +344,13 @@ $("send-file").onclick = async () => {
     return;
   }
   try {
-    await api("/api/share/send", {
+    const result = await api("/api/share/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resource_id: state.selectedId, username }),
     });
+    $("user-matches").innerHTML = "";
+    $("status").textContent = `Sent to @${result.recipient}. They can accept it from any network.`;
     refresh();
   } catch (err) {
     showError(err);

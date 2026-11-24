@@ -205,6 +205,11 @@ def create_app(core: EduBridgeCore) -> Flask:
         core.remove_trusted_key(fingerprint_value, current_user_id())
         return jsonify({"ok": True})
 
+    @app.get("/api/users")
+    @login_required
+    def search_users():
+        return jsonify(core.search_users(request.args.get("q", ""), current_user_id()))
+
     @app.post("/api/share/toggle")
     @login_required
     def toggle_share():

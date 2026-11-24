@@ -241,6 +241,21 @@ class EduBridgeCore:
         with self._lock:
             return self.db.execute("SELECT * FROM users WHERE username = ?", (username.strip().lower(),)).fetchone()
 
+    def search_users(self, query: str, user_id: int | None = None) -> list[dict]:
+        uid = self._uid(user_id)
+        query = query.strip().lower()
+        if len(query) < 2:
+            return []
+        like = f"%{query}%"
+        with self._lock:
+            rows = self.db.execute(
+                """SELECT username, full_name, role FROM users
+                WHERE id != ? AND (username LIKE ? OR lower(full_name) LIKE ?)
+                ORDER BY username LIMIT 8""",
+                (uid, like, like),
+            ).fetchall()
+        return [{"username": row["username"], "full_name": row["full_name"], "role": row["role"]} for row in rows]
+
     def profile(self, user_id: int | None = None) -> dict:
         uid = self._uid(user_id)
         return self.user_public(uid)
