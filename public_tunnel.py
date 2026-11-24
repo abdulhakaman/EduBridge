@@ -1,6 +1,7 @@
 """Expose the local EduBridge web UI with a public HTTPS URL."""
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -8,7 +9,10 @@ import sys
 import threading
 import time
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
+
+QUICK_TUNNEL_RE = re.compile(r"https://[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com")
 
 CLOUDFLARED_URLS = {
     "win32": "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe",
@@ -55,6 +59,69 @@ def ensure_cloudflared(app_dir: Path) -> Path:
     return dest
 
 
+@dataclass(frozen=True)
+class StableTunnel:
+    url: str
+    token: str
+
+
+def _read_secret(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
+def load_stable_tunnel(app_dir: Path, url_override: str = "", token_override: str = "") -> StableTunnel | None:
+    """Return a saved Cloudflare tunnel, or None when EduBridge should open a temporary address."""
+    project = Path(__file__).resolve().parent
+    url = (url_override or os.environ.get("EDUBRIDGE_PUBLIC_URL", "")).strip()
+    token = (token_override or os.environ.get("EDUBRIDGE_TUNNEL_TOKEN", "")).strip()
+    if not url:
+        url = _read_secret(app_dir / "public_url.txt") or _read_secret(project / "public_url.txt")
+    if not token:
+        token = _read_secret(app_dir / "tunnel.token") or _read_secret(project / "tunnel.token")
+    if not url and not token:
+        return None
+    if not url or not token:
+        raise ValueError("A fixed address needs both tunnel.token and public_url.txt.")
+    if not url.startswith("https://") or any(char.isspace() for char in url):
+        raise ValueError("public_url.txt must be one https address.")
+    if any(char.isspace() for char in token) or len(token) < 20:
+        raise ValueError("tunnel.token does not look like a Cloudflare tunnel token.")
+    return StableTunnel(url=url, token=token)
+
+
+def start_named_tunnel(app_dir: Path, token: str, on_ready) -> subprocess.Popen:
+    binary = ensure_cloudflared(app_dir)
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+    process = subprocess.Popen(
+        [str(binary), "tunnel", "--no-autoupdate", "run", "--token", token],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        creationflags=creationflags,
+    )
+
+    def watch() -> None:
+        ready_re = re.compile(r"Registered tunnel connection", re.IGNORECASE)
+        assert process.stdout is not None
+        tail: list[str] = []
+        announced = False
+        for line in process.stdout:
+            tail.append(line.rstrip())
+            del tail[:-8]
+            if not announced and ready_re.search(line):
+                announced = True
+                on_ready()
+        code = process.wait()
+        process.tunnel_note = " ".join(tail) or f"tunnel helper exited ({code})"  # type: ignore[attr-defined]
+
+    threading.Thread(target=watch, daemon=True).start()
+    return process
+
+
 def start_public_tunnel(local_port: int, app_dir: Path, on_url) -> subprocess.Popen:
     binary = ensure_cloudflared(app_dir)
     creationflags = 0
@@ -69,7 +136,7 @@ def start_public_tunnel(local_port: int, app_dir: Path, on_url) -> subprocess.Po
     )
 
     def watch() -> None:
-        url_re = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+        url_re = QUICK_TUNNEL_RE
         assert process.stdout is not None
         tail: list[str] = []
         for line in process.stdout:

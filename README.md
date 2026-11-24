@@ -1,24 +1,66 @@
-# EduBridge - Windows desktop prototype
+# EduBridge
 
-This is the first UI milestone for EduBridge, targeting Windows laptops. It contains a starter resource library, nearby sharing screen, and profile screen. Sample resources are demo data; account management, persistent database storage, peer discovery, and file transfer are not connected yet.
+EduBridge is a course library you open in a browser. A teacher and a student each create an account, then the teacher sends a signed file to the student's username. They do not need to be on the same Wi-Fi.
 
-## Prepare a Windows build
+One computer runs the app. Phones, tablets, and other computers open the public HTTPS address.
 
-On a Windows development computer:
+## Start
 
-1. Install Flutter and Visual Studio with the **Desktop development with C++** workload.
-2. Open PowerShell in this folder and run `flutter create --platforms=windows .`.
-3. Run `flutter pub get`.
-4. Start the app with `flutter run -d windows`.
+Install Python 3, then from this folder:
 
-Flutter's Windows desktop build requires Windows development tools. The current workspace does not have Flutter installed, so the Windows runner files and executable have not been generated here.
+```bat
+py -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+run.bat
+```
 
-## Windows-first build sequence
+On macOS or Linux:
 
-1. App shell and screen layout (this milestone).
-2. Student/teacher profiles and local SQLite database.
-3. Peer discovery and connections between computers on the same local Wi-Fi network.
-4. File transfer with progress, retry, and resume.
-5. Instructor signatures, resource indexing, and tests on multiple Windows laptops.
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+chmod +x run.sh
+./run.sh
+```
 
-For the first computer prototype, use the same local Wi-Fi network for discovery and transfer. This is simpler to demonstrate and troubleshoot than direct Wi-Fi pairing. The application should show the peer's name and ask the user to approve a transfer before accepting a file. Add direct Wi-Fi networking only if the project specifically needs computers to connect without a shared router.
+`run.bat` and `run.sh` start the web app and try to print a public HTTPS address. The same address is shown at the top of the page. Use **Copy address** to share it.
+
+That address lasts while EduBridge stays open. The next start gets a new temporary address.
+
+On this computer the page is also at `http://127.0.0.1:8080`.
+
+## Send a signed file
+
+1. Teacher: open the address, create an account with the role Teacher, add a file, then under Signatures create a signing key and sign the file.
+2. Student: open the same address and create an account. Under Signatures, import the teacher's public key and compare the fingerprint with the teacher.
+3. Teacher: open Share, start typing the student's name or username, choose the account, and select **Send selected file to username**.
+4. Student: accept the file. It appears in their library as Signed.
+
+Only a file with a trusted instructor signature can be sent as official material. The private key stays on the computer that is running EduBridge.
+
+## Keep one public address
+
+To stop the address from changing on every start, create a Cloudflare tunnel whose public hostname points at `http://127.0.0.1:8080`. Save two files next to `run.bat`:
+
+- `tunnel.token` — the tunnel token
+- `public_url.txt` — the fixed address, such as `https://school.example.com`
+
+Start EduBridge again. The page shows **Fixed address**. Those files stay on this computer and are not meant to be committed.
+
+You can also set `EDUBRIDGE_TUNNEL_TOKEN` and `EDUBRIDGE_PUBLIC_URL`.
+
+## Optional same-network transfer
+
+Share includes **Optional: same Wi-Fi device transfer**. That path is not required. Username sending is the way to share a signed file.
+
+The desktop window (`python edubridge.py --ui tk`) is the older local library. Use the browser for accounts.
+
+## Data
+
+Accounts, files, and signing keys are stored on the computer that runs EduBridge:
+
+- Windows: `%LOCALAPPDATA%\EduBridge`
+- macOS: `~/Library/Application Support/EduBridge`
+- Linux: `~/.local/share/EduBridge`
+
+Set `EDUBRIDGE_HOME` to use a different folder.

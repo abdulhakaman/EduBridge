@@ -205,6 +205,11 @@ def create_app(core: EduBridgeCore) -> Flask:
         core.remove_trusted_key(fingerprint_value, current_user_id())
         return jsonify({"ok": True})
 
+    @app.get("/api/users")
+    @login_required
+    def search_users():
+        return jsonify(core.search_users(request.args.get("q", ""), current_user_id()))
+
     @app.post("/api/share/toggle")
     @login_required
     def toggle_share():
@@ -249,8 +254,10 @@ def create_app(core: EduBridgeCore) -> Flask:
         share = core.share_status()
         web_port = int(app.config.get("WEB_PORT", 8080))
         public_url = share.get("public_url") or ""
-        if public_url:
-            hint = "Open this HTTPS address from any phone or network. Create an account, then send files to a username."
+        if public_url and share.get("public_stable"):
+            hint = "This HTTPS address stays the same each time EduBridge starts. Create an account, then send files to a username."
+        elif public_url:
+            hint = "This HTTPS address changes when EduBridge restarts. Open it from any phone or network, then send files to a username."
         elif share.get("public_error"):
             hint = "The public HTTPS address was not created. This computer can still sign in. Other networks need that address."
         elif share.get("public_pending"):
@@ -261,6 +268,7 @@ def create_app(core: EduBridgeCore) -> Flask:
             "public_url": public_url,
             "public_error": share.get("public_error") or "",
             "public_pending": bool(share.get("public_pending")),
+            "public_stable": bool(share.get("public_stable")),
             "local_url": f"http://127.0.0.1:{web_port}",
             "hint": hint,
         })

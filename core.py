@@ -69,6 +69,7 @@ class EduBridgeCore:
         self.public_url = ""
         self.public_url_error = ""
         self.public_requested = False
+        self.public_stable = False
         self.create_tables()
 
     def create_tables(self) -> None:
@@ -239,6 +240,21 @@ class EduBridgeCore:
     def find_user(self, username: str):
         with self._lock:
             return self.db.execute("SELECT * FROM users WHERE username = ?", (username.strip().lower(),)).fetchone()
+
+    def search_users(self, query: str, user_id: int | None = None) -> list[dict]:
+        uid = self._uid(user_id)
+        query = query.strip().lower()
+        if len(query) < 2:
+            return []
+        like = f"%{query}%"
+        with self._lock:
+            rows = self.db.execute(
+                """SELECT username, full_name, role FROM users
+                WHERE id != ? AND (username LIKE ? OR lower(full_name) LIKE ?)
+                ORDER BY username LIMIT 8""",
+                (uid, like, like),
+            ).fetchall()
+        return [{"username": row["username"], "full_name": row["full_name"], "role": row["role"]} for row in rows]
 
     def profile(self, user_id: int | None = None) -> dict:
         uid = self._uid(user_id)
@@ -474,6 +490,7 @@ class EduBridgeCore:
             "public_url": self.public_url,
             "public_error": self.public_url_error,
             "public_pending": self.public_requested and not self.public_url and not self.public_url_error,
+            "public_stable": self.public_stable,
         }
 
     def send_resource(self, resource_id: int, address: str, user_id: int | None = None) -> None:

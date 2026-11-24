@@ -1,4 +1,16 @@
-const state = { selectedId: null, incomingOpen: false, signedIn: false };
+const state = { selectedId: null, incomingOpen: false, signedIn: false, publicAddress: "" };
+
+async function savePublicKey(response) {
+  const fingerprint = response.headers.get("X-Key-Fingerprint");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "edubridge_instructor_public.pem";
+  link.click();
+  URL.revokeObjectURL(url);
+  window.alert(`Public key downloaded.\n\nFingerprint:\n${fingerprint}\n\nShare only the public key.`);
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -293,6 +305,34 @@ $("toggle-share").onclick = async () => {
   }
 };
 
+let userSearchTimer = 0;
+$("share-username").addEventListener("input", () => {
+  clearTimeout(userSearchTimer);
+  userSearchTimer = setTimeout(() => searchUsers().catch(showError), 200);
+});
+
+async function searchUsers() {
+  const query = $("share-username").value.trim();
+  const box = $("user-matches");
+  box.innerHTML = "";
+  if (query.length < 2) return;
+  const people = await api(`/api/users?q=${encodeURIComponent(query)}`);
+  if (!people.length) {
+    box.innerHTML = `<p class="muted">No account matches that name.</p>`;
+    return;
+  }
+  people.forEach((person) => {
+    const el = card(
+      `<h4>@${escapeHtml(person.username)}</h4><p class="muted">${escapeHtml(person.full_name)} · ${escapeHtml(person.role)}</p>`,
+    );
+    el.addEventListener("click", () => {
+      $("share-username").value = person.username;
+      box.innerHTML = "";
+    });
+    box.appendChild(el);
+  });
+}
+
 $("send-file").onclick = async () => {
   if (!state.selectedId) {
     window.alert("Choose a resource from the list first.");
@@ -304,11 +344,13 @@ $("send-file").onclick = async () => {
     return;
   }
   try {
-    await api("/api/share/send", {
+    const result = await api("/api/share/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resource_id: state.selectedId, username }),
     });
+    $("user-matches").innerHTML = "";
+    $("status").textContent = `Sent to @${result.recipient}. They can accept it from any network.`;
     refresh();
   } catch (err) {
     showError(err);
@@ -348,20 +390,12 @@ $("create-key").onclick = async () => {
         replace: false,
       }),
     });
-    const fingerprint = response.headers.get("X-Key-Fingerprint");
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "edubridge_instructor_public.pem";
-    link.click();
-    URL.revokeObjectURL(url);
-    window.alert(`Public key downloaded.\n\nFingerprint:\n${fingerprint}\n\nShare only the public key.`);
+    await savePublicKey(response);
     refresh();
   } catch (err) {
     if (String(err.message).includes("already exists") && window.confirm("Replace the existing signing key?")) {
       try {
-        await api("/api/signing/key", {
+        const response = await api("/api/signing/key", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -370,6 +404,7 @@ $("create-key").onclick = async () => {
             replace: true,
           }),
         });
+        await savePublicKey(response);
         refresh();
       } catch (retry) {
         showError(retry);
@@ -501,8 +536,14 @@ function showError(err) {
 
 function showAccess(info) {
   const url = info.public_url || "";
+  state.publicAddress = url;
+  $("copy-url").classList.toggle("hidden", !url);
+  if (url && info.public_error) {
+    $("access-url").textContent = `Fixed address is not connected: ${url}`;
+    return;
+  }
   if (url) {
-    $("access-url").textContent = `Any network: ${url}`;
+    $("access-url").textContent = info.public_stable ? `Fixed address: ${url}` : `Temporary address: ${url}`;
     return;
   }
   if (info.public_error) {
@@ -515,6 +556,21 @@ function showAccess(info) {
   }
   $("access-url").textContent = info.local_url ? `This computer: ${info.local_url}` : "";
 }
+
+$("copy-url").onclick = async () => {
+  const address = state.publicAddress;
+  if (!address) return;
+  try {
+    await navigator.clipboard.writeText(address);
+  } catch {
+    window.prompt("Copy this address:", address);
+    return;
+  }
+  $("copy-url").textContent = "Copied";
+  setTimeout(() => {
+    $("copy-url").textContent = "Copy address";
+  }, 1500);
+};
 
 async function loadAccess() {
   try {
