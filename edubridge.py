@@ -158,7 +158,7 @@ class EduBridge:
 
     def build_sharing(self) -> None:
         ttk.Label(self.sharing_tab, text="Nearby EduBridge computers", font=("Segoe UI", 17, "bold")).pack(anchor="w", pady=(0, 6))
-        ttk.Label(self.sharing_tab, text="Start sharing on both computers. They should appear here when connected to the same Wi-Fi. On one computer, open run-teacher.bat and run-student.bat, then send to 127.0.0.1:45882.", style="Sub.TLabel", wraplength=850).pack(anchor="w", pady=(0, 16))
+        ttk.Label(self.sharing_tab, text="Send signed files by username in the browser. Run run.bat, open the public HTTPS address, and each person uses their own account. This tab is only an optional transfer between computers on the same network.", style="Sub.TLabel", wraplength=850).pack(anchor="w", pady=(0, 16))
         self.network_status = tk.StringVar(value="Sharing and discovery are stopped.")
         ttk.Label(self.sharing_tab, textvariable=self.network_status, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
         self.ip_label = ttk.Label(self.sharing_tab, text=f"This computer's Wi-Fi address: {self.network.local_ip()}   |   Port: {self.network.port}", style="Sub.TLabel")

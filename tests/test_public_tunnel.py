@@ -7,7 +7,15 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from public_tunnel import StableTunnel, load_stable_tunnel
+from public_tunnel import QUICK_TUNNEL_RE, StableTunnel, load_stable_tunnel
+
+
+class QuickTunnelTests(unittest.TestCase):
+    def test_ignores_the_cloudflare_api_host(self) -> None:
+        self.assertIsNone(QUICK_TUNNEL_RE.search("see https://api.trycloudflare.com/"))
+        match = QUICK_TUNNEL_RE.search("https://flash-smart-instead-barrel.trycloudflare.com")
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(0), "https://flash-smart-instead-barrel.trycloudflare.com")
 
 
 class StableTunnelTests(unittest.TestCase):

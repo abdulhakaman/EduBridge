@@ -21,48 +21,6 @@
             "args": ["--ui", "tk"]
         },
         {
-            "name": "EduBridge Teacher",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/edubridge.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--data-dir",
-                "${env:LOCALAPPDATA}/EduBridge-Teacher",
-                "--port",
-                "45872",
-                "--discovery-port",
-                "45873",
-                "--ui",
-                "web",
-                "--web-port",
-                "8080",
-                "--title",
-                "EduBridge - Teacher"
-            ]
-        },
-        {
-            "name": "EduBridge Student",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/edubridge.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--data-dir",
-                "${env:LOCALAPPDATA}/EduBridge-Student",
-                "--port",
-                "45882",
-                "--discovery-port",
-                "45883",
-                "--ui",
-                "web",
-                "--web-port",
-                "8081",
-                "--title",
-                "EduBridge - Student"
-            ]
-        },
-        {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",

@@ -12,6 +12,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+QUICK_TUNNEL_RE = re.compile(r"https://[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com")
+
 CLOUDFLARED_URLS = {
     "win32": "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe",
     "darwin": "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz",
@@ -134,7 +136,7 @@ def start_public_tunnel(local_port: int, app_dir: Path, on_url) -> subprocess.Po
     )
 
     def watch() -> None:
-        url_re = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
+        url_re = QUICK_TUNNEL_RE
         assert process.stdout is not None
         tail: list[str] = []
         for line in process.stdout:
