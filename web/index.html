@@ -86,12 +86,22 @@
         </select>
       </label>
       <button id="save-profile" class="primary">Save profile</button>
+      <h3>Sign-in</h3>
+      <p class="muted">This username is how other people send you a file. Enter your current password to change it or to set a new password.</p>
+      <label>Username <input id="account-username" autocomplete="username"></label>
+      <label>Current password <input id="account-current" type="password" autocomplete="current-password"></label>
+      <label>New password <input id="account-new" type="password" autocomplete="new-password"></label>
+      <label>Confirm new password <input id="account-new2" type="password" autocomplete="new-password"></label>
+      <button id="save-account" class="primary">Update sign-in</button>
     </section>
 
     <section id="share" class="panel">
       <h2>Share with an account</h2>
       <p class="muted">Send a signed file to another EduBridge username. They can be on mobile data, home Wi-Fi, or campus.</p>
       <div id="inbox-list" class="cards"></div>
+      <h3>File to send</h3>
+      <div id="send-files" class="cards"></div>
+      <p id="send-choice" class="muted"></p>
       <label>Recipient username <input id="share-username" placeholder="Start typing a name or username" autocomplete="off"></label>
       <div id="user-matches" class="cards"></div>
       <button id="send-file" class="primary">Send selected file to username</button>

@@ -86,6 +86,22 @@ def create_app(core: EduBridgeCore) -> Flask:
     def state():
         return jsonify(core.snapshot(request.args.get("q", ""), current_user_id()))
 
+    @app.post("/api/account")
+    @login_required
+    def change_sign_in():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            user = core.change_sign_in(
+                body.get("current_password", ""),
+                body.get("username", ""),
+                body.get("new_password", ""),
+                body.get("confirmation", ""),
+                current_user_id(),
+            )
+        except ValueError as exc:
+            return fail(exc)
+        return jsonify(user)
+
     @app.post("/api/profile")
     @login_required
     def save_profile():

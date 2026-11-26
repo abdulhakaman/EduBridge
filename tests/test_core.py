@@ -60,6 +60,21 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["signature"], "Signed")
 
+    def test_change_sign_in(self) -> None:
+        user = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
+        self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")
+        updated = self.core.change_sign_in("password12", "ada_t", "new-password", "new-password", user)
+        self.assertEqual(updated["username"], "ada_t")
+        self.assertEqual(self.core.login("ada_t", "new-password")["id"], user)
+        with self.assertRaises(ValueError):
+            self.core.login("ada", "password12")
+        with self.assertRaisesRegex(ValueError, "incorrect"):
+            self.core.change_sign_in("password12", "ada_t", "", "", user)
+        with self.assertRaisesRegex(ValueError, "8 characters"):
+            self.core.change_sign_in("new-password", "ada_t", "short", "short", user)
+        with self.assertRaisesRegex(ValueError, "taken"):
+            self.core.change_sign_in("new-password", "sam", "", "", user)
+
     def test_search_other_accounts(self) -> None:
         teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
         self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")

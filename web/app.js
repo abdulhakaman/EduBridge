@@ -80,6 +80,7 @@ function render(data) {
   setIfIdle("role", data.profile.role || "Student");
 
   $("whoami").textContent = data.user ? `Signed in as ${data.user.username}` : "";
+  setIfIdle("account-username", data.user ? data.user.username : "");
   showAccess(data.share || {});
   $("share-status").textContent = data.share.running
     ? "LAN sharing is on."
@@ -127,6 +128,36 @@ function render(data) {
     el.querySelector("[data-act=decline]").onclick = () => decideShare(item.id, false);
     inbox.appendChild(el);
   });
+
+  const sendFiles = $("send-files");
+  sendFiles.innerHTML = "";
+  const signed = data.resources.filter((item) => item.signature === "Signed");
+  const chosen = data.resources.find((item) => Number(item.id) === Number(state.selectedId));
+  if (!signed.length) {
+    sendFiles.innerHTML = `<p class="muted">No signed files yet. Add a file, then sign it under Signatures.</p>`;
+  }
+  signed.forEach((item) => {
+    const el = card(
+      `<h4>${escapeHtml(item.title)}</h4>
+       <div class="meta"><span>${escapeHtml(item.course_code)}</span><span>${escapeHtml(item.academic_year)}</span><span>${escapeHtml(item.file_name)}</span></div>`,
+      item.id,
+      () => {
+        state.selectedId = item.id;
+        refresh();
+      },
+    );
+    sendFiles.appendChild(el);
+  });
+  if (chosen && chosen.signature === "Signed") {
+    $("send-choice").textContent = `Selected: ${chosen.title}`;
+  } else if (signed.length) {
+    $("send-choice").textContent = "Choose a signed file, then a username.";
+  } else {
+    $("send-choice").textContent = "";
+  }
+  const shareTab = document.querySelector('.tab[data-tab="share"]');
+  const waiting = (data.inbox || []).length;
+  shareTab.textContent = waiting ? `Share (${waiting})` : "Share";
 
   const peers = $("peer-list");
   peers.innerHTML = "";
@@ -272,6 +303,28 @@ $("add-form").onsubmit = async (event) => {
     $("add-modal").classList.add("hidden");
     $("add-form").reset();
     $("add-year").value = String(new Date().getFullYear());
+    refresh();
+  } catch (err) {
+    showError(err);
+  }
+};
+
+$("save-account").onclick = async () => {
+  try {
+    const user = await api("/api/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: $("account-username").value,
+        current_password: $("account-current").value,
+        new_password: $("account-new").value,
+        confirmation: $("account-new2").value,
+      }),
+    });
+    $("account-current").value = "";
+    $("account-new").value = "";
+    $("account-new2").value = "";
+    $("whoami").textContent = `Signed in as ${user.username}`;
     refresh();
   } catch (err) {
     showError(err);

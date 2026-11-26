@@ -223,6 +223,37 @@ class EduBridgeCore:
             raise ValueError("Incorrect username or password.")
         return self.user_public(row["id"])
 
+    def change_sign_in(self, current_password: str, username: str = "", new_password: str = "", confirmation: str = "", user_id: int | None = None) -> dict:
+        uid = self._uid(user_id)
+        with self._lock:
+            row = self.db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+        if not row:
+            raise ValueError("Sign in first.")
+        _, digest = _hash_password(current_password or "", row["password_salt"])
+        if not secrets.compare_digest(digest, row["password_hash"]):
+            raise ValueError("Current password is incorrect.")
+        next_username = (username or row["username"]).strip().lower()
+        if not USERNAME_RE.match(next_username):
+            raise ValueError("Username must be 3-32 letters, numbers, or underscores.")
+        if new_password or confirmation:
+            if len(new_password) < 8:
+                raise ValueError("Use a password with at least 8 characters.")
+            if new_password != confirmation:
+                raise ValueError("The new passwords do not match.")
+            salt, new_digest = _hash_password(new_password)
+        else:
+            salt, new_digest = row["password_salt"], row["password_hash"]
+        try:
+            with self._lock, self.db:
+                self.db.execute(
+                    "UPDATE users SET username = ?, password_salt = ?, password_hash = ? WHERE id = ?",
+                    (next_username, salt, new_digest, uid),
+                )
+        except sqlite3.IntegrityError:
+            raise ValueError("That username is already taken.") from None
+        self._set_status(uid, "Sign-in details updated.")
+        return self.user_public(uid)
+
     def user_public(self, user_id: int) -> dict:
         with self._lock:
             row = self.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()

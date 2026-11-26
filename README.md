@@ -33,7 +33,7 @@ On this computer the page is also at `http://127.0.0.1:8080`.
 
 1. Teacher: open the address, create an account with the role Teacher, add a file, then under Signatures create a signing key and sign the file.
 2. Student: open the same address and create an account. Under Signatures, import the teacher's public key and compare the fingerprint with the teacher.
-3. Teacher: open Share, start typing the student's name or username, choose the account, and select **Send selected file to username**.
+3. Teacher: open Share, choose the signed file, start typing the student's name or username, choose the account, and select **Send selected file to username**.
 4. Student: accept the file. It appears in their library as Signed.
 
 Only a file with a trusted instructor signature can be sent as official material. The private key stays on the computer that is running EduBridge.
