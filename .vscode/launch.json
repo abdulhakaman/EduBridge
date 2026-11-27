@@ -8,7 +8,9 @@
             "name": "EduBridge",
             "type": "debugpy",
             "request": "launch",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "program": "${workspaceFolder}/edubridge.py",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": ["--ui", "web", "--web-port", "8080"]
         },
@@ -16,7 +18,9 @@
             "name": "EduBridge Desktop",
             "type": "debugpy",
             "request": "launch",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "program": "${workspaceFolder}/edubridge.py",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": ["--ui", "tk"]
         },
@@ -24,7 +28,9 @@
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
             "program": "${file}",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         }
     ]
