@@ -24,30 +24,30 @@
 
   <section id="auth" class="auth">
     <div class="dialog">
-      <h2>Sign in from any network</h2>
-      <p class="muted">Teacher and student each create an account. Then send files by username — no shared Wi-Fi required.</p>
+      <h2>Create your own account</h2>
+      <p class="muted">A teacher and a student each create their own username and password. Then send files by username.</p>
       <div class="row wrap">
-        <button id="show-login" class="primary">Sign in</button>
-        <button id="show-register" class="ghost">Create account</button>
+        <button id="show-register" class="primary" type="button">Create account</button>
+        <button id="show-login" class="ghost" type="button">Sign in</button>
       </div>
-      <form id="login-form">
-        <label>Username <input id="login-username" autocomplete="username" required></label>
-        <label>Password <input id="login-password" type="password" autocomplete="current-password" required></label>
-        <button type="submit" class="primary">Sign in</button>
-      </form>
-      <form id="register-form" class="hidden">
+      <form id="register-form">
+        <p class="muted">Choose the role for this account.</p>
+        <div class="row wrap">
+          <button id="role-student" class="primary" type="button">I am a student</button>
+          <button id="role-teacher" class="ghost" type="button">I am a teacher</button>
+        </div>
+        <input id="reg-role" type="hidden" value="Student">
         <label>Username <input id="reg-username" autocomplete="username" required></label>
         <label>Password <input id="reg-password" type="password" autocomplete="new-password" required></label>
         <label>Full name <input id="reg-name" autocomplete="name" required></label>
         <label>Academic ID <input id="reg-id" required></label>
         <label>Department <input id="reg-dept" required></label>
-        <label>Role
-          <select id="reg-role">
-            <option>Student</option>
-            <option>Teacher</option>
-          </select>
-        </label>
-        <button type="submit" class="primary">Create account</button>
+        <button type="submit" class="primary">Create this account</button>
+      </form>
+      <form id="login-form" class="hidden">
+        <label>Username <input id="login-username" autocomplete="username" required></label>
+        <label>Password <input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="primary">Sign in</button>
       </form>
     </div>
     <form id="tunnel-form" class="dialog hidden">

@@ -626,6 +626,15 @@ async function decideShare(shareId, approved) {
 $("incoming-yes").onclick = () => decideShare($("incoming-share-id").value, true);
 $("incoming-no").onclick = () => decideShare($("incoming-share-id").value, false);
 
+function chooseRole(role) {
+  $("reg-role").value = role;
+  $("role-student").classList.toggle("primary", role === "Student");
+  $("role-student").classList.toggle("ghost", role !== "Student");
+  $("role-teacher").classList.toggle("primary", role === "Teacher");
+  $("role-teacher").classList.toggle("ghost", role !== "Teacher");
+}
+$("role-student").onclick = () => chooseRole("Student");
+$("role-teacher").onclick = () => chooseRole("Teacher");
 $("show-login").onclick = () => {
   $("login-form").classList.remove("hidden");
   $("register-form").classList.add("hidden");
