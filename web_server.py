@@ -203,6 +203,25 @@ def create_app(core: EduBridgeCore) -> Flask:
         except ValueError as exc:
             return fail(exc)
 
+    @app.post("/api/trust/offer/send")
+    @login_required
+    def send_signing_key():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            return jsonify(core.send_signing_key(body.get("username", ""), current_user_id()))
+        except ValueError as exc:
+            return fail(exc)
+
+    @app.post("/api/trust/offer")
+    @login_required
+    def decide_key_offer():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            core.decide_key_offer(int(body.get("offer_id")), bool(body.get("approved")), bool(body.get("confirmed")), current_user_id())
+        except (ValueError, TypeError) as exc:
+            return fail(exc)
+        return jsonify({"ok": True})
+
     @app.post("/api/trust")
     @login_required
     def import_key():

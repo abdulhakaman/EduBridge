@@ -84,6 +84,9 @@ class EduBridgeCore:
                 department TEXT NOT NULL,
                 role TEXT NOT NULL CHECK(role IN ('Student', 'Teacher'))
             )""")
+            user_columns = {row["name"] for row in self.db.execute("PRAGMA table_info(users)")}
+            if "signing_fingerprint" not in user_columns:
+                self.db.execute("ALTER TABLE users ADD COLUMN signing_fingerprint TEXT")
             self.db.execute("""CREATE TABLE IF NOT EXISTS profile (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
                 full_name TEXT NOT NULL,
@@ -117,6 +120,16 @@ class EduBridgeCore:
                 public_key_pem BLOB NOT NULL,
                 added_at TEXT NOT NULL,
                 PRIMARY KEY(user_id, fingerprint)
+            )""")
+            self.db.execute("""CREATE TABLE IF NOT EXISTS key_offers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INTEGER NOT NULL,
+                recipient_id INTEGER NOT NULL,
+                fingerprint TEXT NOT NULL,
+                instructor_name TEXT NOT NULL,
+                public_key_pem BLOB NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('pending', 'accepted', 'declined')),
+                created_at TEXT NOT NULL
             )""")
             self.db.execute("""CREATE TABLE IF NOT EXISTS shares (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -457,6 +470,7 @@ class EduBridgeCore:
                 "INSERT OR REPLACE INTO trusted_keys(user_id, fingerprint, instructor_name, public_key_pem, added_at) VALUES(?, ?, ?, ?, ?)",
                 (uid, key_fingerprint, name, pem, self._now()),
             )
+            self.db.execute("UPDATE users SET signing_fingerprint = ? WHERE id = ?", (key_fingerprint, uid))
         self._set_status(uid, "Signing key created. Share only the public key.")
         return {"fingerprint": key_fingerprint, "public_key_pem": pem.decode("utf-8"), "instructor_name": name}
 
@@ -498,6 +512,115 @@ class EduBridgeCore:
             )
         self._set_status(uid, f"{name} can now send files signed with this key.")
         return {"fingerprint": info["fingerprint"], "instructor_name": name}
+
+    def _visible_signing_fingerprint(self, user_id: int) -> str:
+        try:
+            fingerprint_value, _name, _pem = self._signing_public_key(user_id)
+        except ValueError:
+            return ""
+        return fingerprint_value
+
+    def _signing_public_key(self, user_id: int) -> tuple[str, str, bytes]:
+        profile = self.profile(user_id)
+        if profile["role"] != "Teacher":
+            raise ValueError("Set your profile role to Teacher before sharing a signing key.")
+        with self._lock:
+            row = self.db.execute("SELECT signing_fingerprint FROM users WHERE id = ?", (user_id,)).fetchone()
+        fingerprint_value = (row["signing_fingerprint"] or "") if row else ""
+        if not fingerprint_value and self._key_path(user_id).is_file():
+            with self._lock:
+                keys = self.db.execute("SELECT fingerprint, instructor_name FROM trusted_keys WHERE user_id = ?", (user_id,)).fetchall()
+            named = [item for item in keys if item["instructor_name"] == profile["full_name"]]
+            chosen = named[0] if len(named) == 1 else (keys[0] if len(keys) == 1 else None)
+            if chosen:
+                fingerprint_value = chosen["fingerprint"]
+                with self._lock, self.db:
+                    self.db.execute("UPDATE users SET signing_fingerprint = ? WHERE id = ?", (fingerprint_value, user_id))
+        if not fingerprint_value:
+            raise ValueError("Create a signing key before sending it.")
+        with self._lock:
+            key = self.db.execute(
+                "SELECT instructor_name, public_key_pem FROM trusted_keys WHERE user_id = ? AND fingerprint = ?",
+                (user_id, fingerprint_value),
+            ).fetchone()
+        if not key:
+            raise ValueError("Create a signing key before sending it.")
+        pem = key["public_key_pem"]
+        if isinstance(pem, str):
+            pem = pem.encode("utf-8")
+        return fingerprint_value, key["instructor_name"], bytes(pem)
+
+    def send_signing_key(self, recipient_username: str, user_id: int | None = None) -> dict:
+        uid = self._uid(user_id)
+        recipient = self.find_user(recipient_username)
+        if not recipient:
+            raise ValueError("No EduBridge account has that username.")
+        if recipient["id"] == uid:
+            raise ValueError("Choose another person's username.")
+        fingerprint_value, name, pem = self._signing_public_key(uid)
+        with self._lock, self.db:
+            existing = self.db.execute(
+                "SELECT id FROM key_offers WHERE sender_id = ? AND recipient_id = ? AND status = 'pending'",
+                (uid, recipient["id"]),
+            ).fetchone()
+            if existing:
+                self.db.execute(
+                    "UPDATE key_offers SET fingerprint = ?, instructor_name = ?, public_key_pem = ?, created_at = ? WHERE id = ?",
+                    (fingerprint_value, name, pem, self._now(), existing["id"]),
+                )
+            else:
+                self.db.execute(
+                    """INSERT INTO key_offers(sender_id, recipient_id, fingerprint, instructor_name, public_key_pem, status, created_at)
+                    VALUES(?, ?, ?, ?, ?, 'pending', ?)""",
+                    (uid, recipient["id"], fingerprint_value, name, pem, self._now()),
+                )
+        self._set_status(uid, f"Sent your public key to {recipient['username']}. They must compare the fingerprint before trusting it.")
+        self._alert(recipient["id"], "info", "Instructor key waiting", f"{self.profile(uid)['full_name']} sent a public key. Compare the fingerprint before trusting it.")
+        return {"ok": True, "recipient": recipient["username"], "fingerprint": fingerprint_value}
+
+    def key_inbox(self, user_id: int | None = None) -> list[dict]:
+        uid = self._uid(user_id)
+        with self._lock:
+            rows = self.db.execute(
+                """SELECT key_offers.id, key_offers.fingerprint, key_offers.instructor_name,
+                users.username AS sender_username, users.full_name AS sender_name
+                FROM key_offers JOIN users ON users.id = key_offers.sender_id
+                WHERE recipient_id = ? AND status = 'pending' ORDER BY key_offers.id DESC""",
+                (uid,),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "fingerprint": row["fingerprint"],
+                "instructor_name": row["instructor_name"],
+                "sender_username": row["sender_username"],
+                "sender_name": row["sender_name"],
+            }
+            for row in rows
+        ]
+
+    def decide_key_offer(self, offer_id: int, approved: bool, confirmed: bool, user_id: int | None = None) -> None:
+        uid = self._uid(user_id)
+        with self._lock:
+            row = self.db.execute(
+                "SELECT * FROM key_offers WHERE id = ? AND recipient_id = ? AND status = 'pending'",
+                (offer_id, uid),
+            ).fetchone()
+        if not row:
+            raise ValueError("There is no instructor key waiting for approval.")
+        if not approved:
+            with self._lock, self.db:
+                self.db.execute("UPDATE key_offers SET status = 'declined' WHERE id = ?", (offer_id,))
+            self._set_status(uid, "Instructor key declined.")
+            return
+        if not confirmed:
+            raise ValueError("Compare the fingerprint with the instructor before trusting this key.")
+        pem = row["public_key_pem"]
+        if isinstance(pem, str):
+            pem = pem.encode("utf-8")
+        self.import_trusted_key(bytes(pem), row["instructor_name"], True, uid)
+        with self._lock, self.db:
+            self.db.execute("UPDATE key_offers SET status = 'accepted' WHERE id = ?", (offer_id,))
 
     def remove_trusted_key(self, fingerprint_value: str, user_id: int | None = None) -> None:
         uid = self._uid(user_id)
@@ -758,6 +881,8 @@ class EduBridgeCore:
             "profile": self.profile(uid),
             "resources": self.list_resources(query, uid),
             "trusted": self.trusted_instructors(uid),
+            "key_inbox": self.key_inbox(uid),
+            "signing_fingerprint": self._visible_signing_fingerprint(uid),
             "peers": self._refresh_peers(),
             "inbox": inbox,
             "share": self.share_status(),

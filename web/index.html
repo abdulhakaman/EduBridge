@@ -129,6 +129,13 @@
         <button id="sign-file">Sign selected library file</button>
       </div>
       <p class="hint">The private key stays on the EduBridge device. Never share it.</p>
+      <h3>Send your public key</h3>
+      <p id="own-fingerprint" class="fingerprint"></p>
+      <label>Student username <input id="key-username" placeholder="Start typing a name or username" autocomplete="off"></label>
+      <div id="key-matches" class="cards"></div>
+      <button id="send-key" class="primary">Send public key to username</button>
+      <h3>Keys waiting for you</h3>
+      <div id="key-inbox" class="cards"></div>
       <h3>Trusted instructors</h3>
       <label>Instructor public key <input id="trust-file" type="file" accept=".pem,.txt,*/*"></label>
       <p id="trust-fingerprint" class="fingerprint"></p>

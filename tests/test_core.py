@@ -60,6 +60,21 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["signature"], "Signed")
 
+    def test_send_signing_key_requires_confirmation(self) -> None:
+        teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
+        student = self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")
+        key = self.core.create_signing_key("passphrase-1", "passphrase-1", user_id=teacher)
+        sent = self.core.send_signing_key("sam", teacher)
+        self.assertEqual(sent["fingerprint"], key["fingerprint"])
+        waiting = self.core.key_inbox(student)
+        self.assertEqual(waiting[0]["fingerprint"], key["fingerprint"])
+        with self.assertRaisesRegex(ValueError, "fingerprint"):
+            self.core.decide_key_offer(waiting[0]["id"], True, False, student)
+        self.assertEqual(self.core.trusted_instructors(student), [])
+        self.core.decide_key_offer(waiting[0]["id"], True, True, student)
+        self.assertEqual(self.core.trusted_instructors(student)[0]["fingerprint"], key["fingerprint"])
+        self.assertEqual(self.core.key_inbox(student), [])
+
     def test_change_sign_in(self) -> None:
         user = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
         self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")

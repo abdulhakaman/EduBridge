@@ -175,6 +175,35 @@ function render(data) {
     peers.appendChild(el);
   });
 
+  const ownFingerprint = data.signing_fingerprint || "";
+  $("own-fingerprint").textContent = ownFingerprint ? `Your fingerprint: ${ownFingerprint}` : "Create a signing key before sending it.";
+  const keptConfirmed = new Set(
+    [...document.querySelectorAll("#key-inbox [data-act=confirm]:checked")].map((box) => box.dataset.id),
+  );
+  const keyInbox = $("key-inbox");
+  keyInbox.innerHTML = "";
+  if (!(data.key_inbox || []).length) {
+    keyInbox.innerHTML = `<p class="muted">No instructor keys are waiting.</p>`;
+  }
+  (data.key_inbox || []).forEach((item) => {
+    const el = card(
+      `<h4>${escapeHtml(item.instructor_name)}</h4>
+       <p class="muted">From ${escapeHtml(item.sender_name)} (@${escapeHtml(item.sender_username)})</p>
+       <p class="fingerprint">${escapeHtml(item.fingerprint)}</p>
+       <label class="check"><input data-act="confirm" data-id="${item.id}" type="checkbox"> I compared this fingerprint with the instructor</label>
+       <button data-act="accept">Trust this key</button>
+       <button data-act="decline" class="ghost">Decline</button>`,
+    );
+    const box = el.querySelector("[data-act=confirm]");
+    box.checked = keptConfirmed.has(String(item.id));
+    el.querySelector("[data-act=accept]").onclick = () => decideKey(item.id, true, box.checked);
+    el.querySelector("[data-act=decline]").onclick = () => decideKey(item.id, false, false);
+    keyInbox.appendChild(el);
+  });
+  const signTab = document.querySelector('.tab[data-tab="sign"]');
+  const keysWaiting = (data.key_inbox || []).length;
+  signTab.textContent = keysWaiting ? `Signatures (${keysWaiting})` : "Signatures";
+
   const trust = $("trust-list");
   trust.innerHTML = "";
   data.trusted.forEach((item) => {
@@ -431,6 +460,67 @@ $("cancel-send").onclick = async () => {
   await api("/api/share/cancel", { method: "POST" });
   refresh();
 };
+
+let keySearchTimer = 0;
+$("key-username").addEventListener("input", () => {
+  clearTimeout(keySearchTimer);
+  keySearchTimer = setTimeout(() => searchKeyUsers().catch(showError), 200);
+});
+
+async function searchKeyUsers() {
+  const query = $("key-username").value.trim();
+  const box = $("key-matches");
+  box.innerHTML = "";
+  if (query.length < 2) return;
+  const people = await api(`/api/users?q=${encodeURIComponent(query)}`);
+  if (!people.length) {
+    box.innerHTML = `<p class="muted">No account matches that name.</p>`;
+    return;
+  }
+  people.forEach((person) => {
+    const el = card(
+      `<h4>@${escapeHtml(person.username)}</h4><p class="muted">${escapeHtml(person.full_name)} · ${escapeHtml(person.role)}</p>`,
+    );
+    el.addEventListener("click", () => {
+      $("key-username").value = person.username;
+      box.innerHTML = "";
+    });
+    box.appendChild(el);
+  });
+}
+
+$("send-key").onclick = async () => {
+  const username = $("key-username").value.trim();
+  if (!username) {
+    window.alert("Enter the student's EduBridge username.");
+    return;
+  }
+  try {
+    const result = await api("/api/trust/offer/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    $("key-matches").innerHTML = "";
+    $("status").textContent = `Sent your public key to @${result.recipient}. They must compare the fingerprint before trusting it.`;
+    refresh();
+  } catch (err) {
+    showError(err);
+  }
+};
+
+async function decideKey(offerId, approved, confirmed) {
+  try {
+    await api("/api/trust/offer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offer_id: offerId, approved, confirmed }),
+    });
+    refresh();
+  } catch (err) {
+    showError(err);
+  }
+}
 
 $("create-key").onclick = async () => {
   try {
