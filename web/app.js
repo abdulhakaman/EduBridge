@@ -679,14 +679,22 @@ function showError(err) {
 
 function showAccess(info) {
   const url = info.public_url || "";
-  state.publicAddress = url;
-  $("copy-url").classList.toggle("hidden", !url);
+  const phone = info.phone_url || "";
+  const copyTarget = info.public_stable && url ? url : (phone || url);
+  state.publicAddress = copyTarget;
+  $("copy-url").classList.toggle("hidden", !copyTarget);
+  $("phone-url").textContent = phone ? `Phone next to this computer: ${phone}` : "";
+  $("tunnel-form").classList.toggle("hidden", !info.can_configure);
   if (url && info.public_error) {
     $("access-url").textContent = `Fixed address is not connected: ${url}`;
     return;
   }
+  if (url && info.public_stable) {
+    $("access-url").textContent = `Fixed address: ${url}`;
+    return;
+  }
   if (url) {
-    $("access-url").textContent = info.public_stable ? `Fixed address: ${url}` : `Temporary address: ${url}`;
+    $("access-url").textContent = `Temporary address: ${url}`;
     return;
   }
   if (info.public_error) {
@@ -697,8 +705,26 @@ function showAccess(info) {
     $("access-url").textContent = "Creating a public HTTPS address...";
     return;
   }
-  $("access-url").textContent = info.local_url ? `This computer: ${info.local_url}` : "";
+  $("access-url").textContent = !phone && info.local_url ? `This computer: ${info.local_url}` : "";
 }
+
+$("tunnel-form").onsubmit = async (event) => {
+  event.preventDefault();
+  try {
+    await api("/api/tunnel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        public_url: $("tunnel-url").value,
+        token: $("tunnel-token").value,
+      }),
+    });
+    $("tunnel-token").value = "";
+    window.alert("Fixed address saved. Start EduBridge again. The page will show Fixed address.");
+  } catch (err) {
+    showError(err);
+  }
+};
 
 $("copy-url").onclick = async () => {
   const address = state.publicAddress;

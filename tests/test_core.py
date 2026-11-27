@@ -90,6 +90,10 @@ class CoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "taken"):
             self.core.change_sign_in("new-password", "sam", "", "", user)
 
+    def test_phone_url_is_reported(self) -> None:
+        self.core.phone_url = "http://192.168.137.1:8080"
+        self.assertEqual(self.core.share_status()["phone_url"], "http://192.168.137.1:8080")
+
     def test_search_other_accounts(self) -> None:
         teacher = self.core.register("ada", "password12", "Ada Teacher", "T1", "CS", "Teacher")
         self.core.register("sam", "password12", "Sam Student", "S1", "CS", "Student")

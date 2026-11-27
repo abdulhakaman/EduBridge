@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory, session
 
 from core import EduBridgeCore
+from public_tunnel import save_stable_tunnel
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
@@ -284,6 +285,21 @@ def create_app(core: EduBridgeCore) -> Flask:
             return fail(exc)
         return jsonify({"ok": True})
 
+    def _on_this_computer() -> bool:
+        host = (request.host or "").split(":")[0]
+        return host in {"127.0.0.1", "localhost"}
+
+    @app.post("/api/tunnel")
+    def save_tunnel():
+        if not _on_this_computer():
+            return fail("Save the fixed address from this computer.", 403)
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            stable = save_stable_tunnel(core.app_dir, body.get("public_url", ""), body.get("token", ""))
+        except ValueError as exc:
+            return fail(exc)
+        return jsonify({"ok": True, "public_url": stable.url, "restart": True})
+
     @app.get("/api/access")
     def access():
         share = core.share_status()
@@ -292,7 +308,7 @@ def create_app(core: EduBridgeCore) -> Flask:
         if public_url and share.get("public_stable"):
             hint = "This HTTPS address stays the same each time EduBridge starts. Create an account, then send files to a username."
         elif public_url:
-            hint = "This HTTPS address changes when EduBridge restarts. Open it from any phone or network, then send files to a username."
+            hint = "This HTTPS address changes when EduBridge restarts and a phone may not be able to open it. Use the phone address when the phone is next to this computer."
         elif share.get("public_error"):
             hint = "The public HTTPS address was not created. This computer can still sign in. Other networks need that address."
         elif share.get("public_pending"):
@@ -305,6 +321,8 @@ def create_app(core: EduBridgeCore) -> Flask:
             "public_pending": bool(share.get("public_pending")),
             "public_stable": bool(share.get("public_stable")),
             "local_url": f"http://127.0.0.1:{web_port}",
+            "phone_url": share.get("phone_url") or "",
+            "can_configure": _on_this_computer() and not bool(share.get("public_stable")),
             "hint": hint,
         })
 

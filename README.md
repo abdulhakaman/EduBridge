@@ -29,6 +29,8 @@ That address lasts while EduBridge stays open. The next start gets a new tempora
 
 On this computer the page is also at `http://127.0.0.1:8080`.
 
+On Windows, EduBridge starts a Wi-Fi hotspot named EduBridge. The window prints the password. A phone joins that Wi-Fi and opens the phone address at the top of the page. That connection is for the phone next to this computer. A school or office Wi-Fi such as Inc-Center often blocks the phone from opening this computer directly.
+
 ## Send a signed file
 
 1. Teacher: open the address, create an account with the role Teacher, add a file, then under Signatures create a signing key and sign the file.
@@ -40,7 +42,7 @@ Only a file with a trusted instructor signature can be sent as official material
 
 ## Keep one public address
 
-To stop the address from changing on every start, create a Cloudflare tunnel whose public hostname points at `http://127.0.0.1:8080`. Save two files next to `run.bat`:
+To stop the address from changing on every start, create a Cloudflare tunnel whose public hostname points at `http://127.0.0.1:8080`. On this computer, open `http://127.0.0.1:8080` and use **Keep one public address**, or save two files next to `run.bat`:
 
 - `tunnel.token` — the tunnel token
 - `public_url.txt` — the fixed address, such as `https://school.example.com`

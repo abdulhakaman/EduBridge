@@ -727,6 +727,21 @@ def run_web_ui(args: argparse.Namespace) -> None:
             print(f"Public HTTPS address was not created ({exc}).", flush=True)
             print("Accounts still work on this computer. Other networks need that public address.", flush=True)
 
+    def start_hotspot() -> None:
+        try:
+            from phone_hotspot import HOTSPOT_PASSWORD, HOTSPOT_SSID, start_phone_hotspot
+
+            url = start_phone_hotspot(args.web_port)
+        except Exception as exc:
+            print(f"Phone Wi-Fi was not started ({exc}).", flush=True)
+            return
+        if not url:
+            return
+        core.phone_url = url
+        print(f"Phone next to this computer: {url}", flush=True)
+        print(f"Join Wi-Fi {HOTSPOT_SSID} with password {HOTSPOT_PASSWORD}. The phone can say it has no internet.", flush=True)
+
+    threading.Thread(target=start_hotspot, name="edubridge-hotspot", daemon=True).start()
     if core.public_requested:
         threading.Thread(target=start_tunnel, name="edubridge-tunnel", daemon=True).start()
 

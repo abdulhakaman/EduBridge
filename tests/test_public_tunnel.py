@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from public_tunnel import QUICK_TUNNEL_RE, StableTunnel, load_stable_tunnel
+from public_tunnel import QUICK_TUNNEL_RE, StableTunnel, load_stable_tunnel, save_stable_tunnel
 
 
 class QuickTunnelTests(unittest.TestCase):
@@ -40,6 +40,17 @@ class StableTunnelTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"EDUBRIDGE_PUBLIC_URL": "", "EDUBRIDGE_TUNNEL_TOKEN": ""}):
                 with self.assertRaises(ValueError):
                     load_stable_tunnel(root)
+
+    def test_save_then_load(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with mock.patch("public_tunnel._project_dir", return_value=root):
+                save_stable_tunnel(root, "https://school.example.com", "d" * 24)
+            self.assertTrue((root / "public_url.txt").is_file())
+            self.assertTrue((root / "tunnel.token").is_file())
+            with mock.patch.dict(os.environ, {"EDUBRIDGE_PUBLIC_URL": "", "EDUBRIDGE_TUNNEL_TOKEN": ""}):
+                loaded = load_stable_tunnel(root)
+            self.assertEqual(loaded, StableTunnel("https://school.example.com", "d" * 24))
 
     def test_environment_overrides_files(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

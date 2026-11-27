@@ -71,9 +71,33 @@ def _read_secret(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def validate_stable_tunnel(url: str, token: str) -> StableTunnel:
+    url = url.strip()
+    token = token.strip()
+    if not url.startswith("https://") or any(char.isspace() for char in url):
+        raise ValueError("The fixed address must be one https address.")
+    if any(char.isspace() for char in token) or len(token) < 20:
+        raise ValueError("The tunnel token does not look like a Cloudflare tunnel token.")
+    return StableTunnel(url=url, token=token)
+
+
+def _project_dir() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def save_stable_tunnel(app_dir: Path, url: str, token: str) -> StableTunnel:
+    """Store a fixed address where the next EduBridge start will find it."""
+    stable = validate_stable_tunnel(url, token)
+    for folder in (app_dir, _project_dir()):
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "public_url.txt").write_text(stable.url + "\n", encoding="utf-8")
+        (folder / "tunnel.token").write_text(stable.token + "\n", encoding="utf-8")
+    return stable
+
+
 def load_stable_tunnel(app_dir: Path, url_override: str = "", token_override: str = "") -> StableTunnel | None:
     """Return a saved Cloudflare tunnel, or None when EduBridge should open a temporary address."""
-    project = Path(__file__).resolve().parent
+    project = _project_dir()
     url = (url_override or os.environ.get("EDUBRIDGE_PUBLIC_URL", "")).strip()
     token = (token_override or os.environ.get("EDUBRIDGE_TUNNEL_TOKEN", "")).strip()
     if not url:
@@ -84,11 +108,7 @@ def load_stable_tunnel(app_dir: Path, url_override: str = "", token_override: st
         return None
     if not url or not token:
         raise ValueError("A fixed address needs both tunnel.token and public_url.txt.")
-    if not url.startswith("https://") or any(char.isspace() for char in url):
-        raise ValueError("public_url.txt must be one https address.")
-    if any(char.isspace() for char in token) or len(token) < 20:
-        raise ValueError("tunnel.token does not look like a Cloudflare tunnel token.")
-    return StableTunnel(url=url, token=token)
+    return validate_stable_tunnel(url, token)
 
 
 def start_named_tunnel(app_dir: Path, token: str, on_ready) -> subprocess.Popen:

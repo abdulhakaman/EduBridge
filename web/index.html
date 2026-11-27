@@ -14,6 +14,7 @@
       <p class="sub">Course library you can open from any phone, tablet, or computer</p>
     </div>
     <div>
+      <p id="phone-url" class="access"></p>
       <p id="access-url" class="access"></p>
       <button id="copy-url" class="ghost hidden" type="button">Copy address</button>
       <p id="whoami" class="muted"></p>
@@ -49,6 +50,13 @@
         <button type="submit" class="primary">Create account</button>
       </form>
     </div>
+    <form id="tunnel-form" class="dialog hidden">
+      <h3>Keep one public address</h3>
+      <p class="muted">In Cloudflare, create a tunnel whose public hostname points at http://127.0.0.1:8080. Paste that https address and the tunnel token here, then start EduBridge again.</p>
+      <label>Fixed https address <input id="tunnel-url" placeholder="https://school.example.com" autocomplete="off"></label>
+      <label>Tunnel token <input id="tunnel-token" type="password" autocomplete="off"></label>
+      <button type="submit" class="primary">Save fixed address</button>
+    </form>
   </section>
 
   <nav class="tabs hidden" id="app-tabs" role="tablist">
